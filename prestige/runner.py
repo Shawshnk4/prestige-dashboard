@@ -1,7 +1,7 @@
 """Run the model: bring FYERS closes up to the last completed session, assemble the data, compute every schedule's
 books, store the result. One run at a time; progress is readable while it runs."""
 from __future__ import annotations
-import math, threading, time, traceback
+import math, os, threading, time, traceback
 from datetime import datetime
 import numpy as np, pandas as pd
 
@@ -12,6 +12,8 @@ CLOSE_READY = (16, 0)            # IST time after which today's official close i
 STATE = dict(running=False, progress="", step=0, steps=0, started=None, finished=None, error=None)
 _lock = threading.Lock()
 LATEST = {"result": None}
+# first rebalance of the live (FYERS-data) period: the October book traded at the close of 26-Oct-2026
+LIVE_START = pd.Timestamp(os.getenv("LIVE_START", "2026-10-26"))
 
 
 def now_ist():
@@ -73,7 +75,98 @@ def update_data(holidays):
             warn.append(f"{s}: no FYERS candles from {start.date()} to {target.date()}"); continue
         h["symbol"] = s
         written += db.upsert_closes(h)
+    warn += update_portfolio_futures(target)
     return written, warn, target
+
+
+def portfolio_fut_symbols(p):
+    return {CAL.fut_symbol(x["symbol"], p["contract"]): x["symbol"] for x in (p.get("positions") or [])}
+
+
+def update_portfolio_futures(target, portfolios=None):
+    """daily closes of the futures contracts held by saved portfolios (current, and closed ones still missing data)"""
+    warn = []
+    ports = portfolios if portfolios is not None else [p for p in db.list_portfolios(200)]
+    last = db.last_dates("fut_daily")
+    todo = []
+    for p in ports:
+        start = pd.Timestamp(p["trade_date"]) - pd.Timedelta(days=5)
+        end = min(target, pd.Timestamp(p["contract"]))
+        if p.get("closed_at"):
+            end = min(end, pd.Timestamp(str(p["closed_at"])[:10]))
+        for f in portfolio_fut_symbols(p):
+            if last.get(f) is None or last[f] < end:
+                todo.append((f, start if last.get(f) is None else last[f] - pd.Timedelta(days=5), end))
+    seen = {}
+    for f, a, b in todo:                               # one request per contract
+        a0, b0 = seen.get(f, (a, b)); seen[f] = (min(a, a0), max(b, b0))
+    for i, (f, (a, b)) in enumerate(seen.items(), 1):
+        STATE["steps"] = len(seen); _p(f"Fetching futures closes for saved portfolios {i}/{len(seen)}", i)
+        try:
+            h = FY.history(f, a, b)
+        except Exception as e:
+            warn.append(f"{f}: futures history failed ({e})"); continue
+        h = h[h.date <= b]
+        if len(h):
+            h["symbol"] = f; db.upsert_fut(h)
+    return warn
+
+
+def fut_closes_on(symbols, contract, day):
+    """futures closes of `symbols` (contract expiring on `contract`) at the close of `day`; fetched from FYERS if missing"""
+    day = pd.Timestamp(day)
+    fs = {CAL.fut_symbol(s, contract): s for s in symbols}
+    have = db.load_fut(fs, day - pd.Timedelta(days=7))
+    have = have[have.date <= day]
+    out, miss = {}, []
+    for f, s in fs.items():
+        g = have[(have.symbol == f) & (have.date == day)]
+        if len(g): out[s] = float(g.close.iloc[-1])
+        else: miss.append(f)
+    for f in miss:
+        try:
+            h = FY.history(f, day - pd.Timedelta(days=7), day)
+        except Exception:
+            continue
+        if len(h):
+            h["symbol"] = f; db.upsert_fut(h)
+            g = h[h.date == day]
+            if len(g): out[fs[f]] = float(g.close.iloc[-1])
+    return out
+
+
+# ------------------------------------------------------------------ live track record of the model's rebalances
+def track_record(M: Model, extras, sch):
+    """every rebalance of a schedule from LIVE_START: the book (weights in force), held to the next rebalance (or the
+    latest close), buy-and-hold within the period. Leg returns from adjusted closes; Nifty 50 TRI over the same days."""
+    R = CAL.rebalance_dates(M.tc, M.E, sch)
+    R = R[(R.rebalance >= LIVE_START) & (R.rebalance <= M.END)].reset_index(drop=True)
+    cal = M.cal
+    close = M.ctx.close.ffill(limit=10)
+    tri = extras["tri50"].reindex(cal).ffill()
+    out = []
+    ds = lambda x: str(pd.Timestamp(x).date())
+    for i, row in R.iterrows():
+        t0 = row.rebalance
+        t1 = R.rebalance.iloc[i + 1] if i + 1 < len(R) else M.END
+        book, W = M.book(row.signal, M.weights_for(M.tc.prev_session(row.cycle_start))[0])
+        days = cal[(cal >= t0) & (cal <= t1)]
+        legs, hits = {}, {}
+        for side in ("LONG", "SHORT"):
+            b = book[book.side == side]
+            P = close.loc[days, b.index]
+            rel = P.div(P.iloc[0]) - 1
+            legs[side] = (rel * b.weight.values).sum(axis=1)
+            end_move = rel.iloc[-1]
+            hits[side] = float((end_move > 0).mean() if side == "LONG" else (end_move < 0).mean())
+        bench = tri.loc[days] / tri.loc[t0] - 1
+        out.append(dict(rebalance=ds(t0), signal=ds(row.signal), kind=row.kind, offset=int(row.offset), end=ds(t1),
+                        open=bool(i == len(R) - 1), dates=[ds(d) for d in days],
+                        long=[round(float(x), 6) for x in legs["LONG"]], short=[round(float(x), 6) for x in legs["SHORT"]],
+                        bench=[round(float(x), 6) for x in bench], hit_long=hits["LONG"], hit_short=hits["SHORT"],
+                        longs=list(book.index[book.side == "LONG"]), shorts=list(book.index[book.side == "SHORT"]),
+                        weights={k: round(float(W[k]), 4) for k in FACTORS}))
+    return out
 
 
 def _book_rows(t):
@@ -159,6 +252,13 @@ def serialize(M: Model, extras, warn, raw: pd.DataFrame):
         res["warnings"].append("data/ref/holidays.csv ends within 60 days: add the next NSE trading-holiday list so expiry and "
                                "rebalance dates stay right")
     res["sectors_ok"] = True
+    res["live_start"] = str(LIVE_START.date())
+    res["track"] = {sch: track_record(M, extras, sch) for sch in CAL.SCHEDULES}
+    t50 = extras["tri50"]
+    t50 = t50[t50.index >= DS.ANCHOR - pd.Timedelta(days=10)]
+    res["bench"] = {ds(d): round(float(v), 4) for d, v in t50.items()}
+    res["bench_note"] = ("Nifty 50 TRI to 23-Oct-2026; after that extended with Nifty 50 price returns from FYERS "
+                         "(dividends, about 0.1% a month, not included)")
     return res
 
 

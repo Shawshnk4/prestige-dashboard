@@ -20,6 +20,9 @@ create table if not exists portfolios (id bigserial primary key, created_at time
   name text, schedule text, status text not null default 'current', capital double precision, hedge double precision,
   trade_date date, signal_date date, contract date, positions jsonb, closed_at timestamptz, closed_by text, exit_prices jsonb, note text);
 create table if not exists app_state (key text primary key, value text, updated_at timestamptz not null default now());
+create table if not exists fut_daily (symbol text not null, d date not null, close double precision not null,
+  fetched_at timestamptz not null default now(), primary key (symbol, d));
+alter table fut_daily enable row level security;
 alter table fyers_daily enable row level security;
 alter table runs enable row level security;
 alter table portfolios enable row level security;
@@ -34,6 +37,8 @@ create table if not exists portfolios (id integer primary key autoincrement, cre
   name text, schedule text, status text not null default 'current', capital real, hedge real, trade_date text, signal_date text,
   contract text, positions text, closed_at text, closed_by text, exit_prices text, note text);
 create table if not exists app_state (key text primary key, value text, updated_at text default current_timestamp);
+create table if not exists fut_daily (symbol text not null, d text not null, close real not null,
+  fetched_at text default current_timestamp, primary key (symbol, d));
 """
 
 
@@ -99,11 +104,11 @@ def _json_out(x):
 
 
 # ------------------------------------------------------------------ FYERS daily closes
-def upsert_closes(df: pd.DataFrame):
+def upsert_closes(df: pd.DataFrame, table="fyers_daily"):
     if df.empty:
         return 0
     rows = [(str(s), str(pd.Timestamp(d).date()), float(v)) for s, d, v in df[["symbol", "date", "close"]].itertuples(index=False)]
-    sql = q("insert into fyers_daily (symbol, d, close) values (?, ?, ?) "
+    sql = q(f"insert into {table} (symbol, d, close) values (?, ?, ?) "
             "on conflict (symbol, d) do update set close = excluded.close, fetched_at = " + ("current_timestamp" if IS_SQLITE else "now()"))
     with conn() as c:
         if IS_SQLITE:
@@ -121,8 +126,24 @@ def load_closes(since="2000-01-01") -> pd.DataFrame:
     return df
 
 
-def last_dates() -> dict:
-    return {r["symbol"]: pd.Timestamp(r["m"]) for r in execute("select symbol, max(d) as m from fyers_daily group by symbol")}
+def last_dates(table="fyers_daily") -> dict:
+    return {r["symbol"]: pd.Timestamp(r["m"]) for r in execute(f"select symbol, max(d) as m from {table} group by symbol")}
+
+
+# ------------------------------------------------------------------ futures daily closes (FYERS contract symbols)
+def upsert_fut(df: pd.DataFrame):
+    return upsert_closes(df, "fut_daily")
+
+
+def load_fut(symbols, since="2000-01-01") -> pd.DataFrame:
+    symbols = list(symbols)
+    if not symbols:
+        return pd.DataFrame(columns=["symbol", "date", "close"])
+    ph = ", ".join("?" for _ in symbols)
+    rows = execute(f"select symbol, d, close from fut_daily where d >= ? and symbol in ({ph}) order by d", (str(since)[:10], *symbols))
+    df = pd.DataFrame(rows, columns=["symbol", "d", "close"]).rename(columns={"d": "date"})
+    df["date"] = pd.to_datetime(df["date"])
+    return df
 
 
 # ------------------------------------------------------------------ app state (FYERS token, last run status)
@@ -168,6 +189,11 @@ def _p(r):
 
 def list_portfolios(limit=50):
     return [_p(r) for r in execute(f"select {', '.join(PCOLS)} from portfolios order by id desc limit {int(limit)}")]
+
+
+def get_portfolio(pid):
+    r = execute(f"select {', '.join(PCOLS)} from portfolios where id = ?", (int(pid),))
+    return _p(r[0]) if r else None
 
 
 def current_portfolio():

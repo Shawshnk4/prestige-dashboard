@@ -8,6 +8,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/styles.css">
+<script>try { const t = localStorage.getItem("prestige.theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
+<script src="/static/vendor/chart.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 </head>
 <body>
@@ -23,22 +25,29 @@
 </div>
 
 <div id="app" hidden>
-  <header class="top">
-    <div class="wordmark">PRESTIGE</div>
-    <div id="datastate" class="datastate"></div>
-    <div class="top-actions">
-      <button id="run-btn" class="btn primary">Run model</button>
-      <button id="signout" class="btn ghost">Sign out</button>
+  <header class="band">
+    <div class="band-top">
+      <div class="brand">
+        <div class="wordmark">PRESTIGE</div>
+        <div id="datastate" class="datastate"></div>
+      </div>
+      <div id="nifty" class="nifty" title="Nifty 50, live from FYERS"></div>
+      <div class="band-actions">
+        <button id="theme-btn" class="icon-btn" title="Switch light / dark" aria-label="Switch light or dark theme"></button>
+        <button id="run-btn" class="btn primary">Run model</button>
+        <button id="signout" class="btn ghost-band">Sign out</button>
+      </div>
     </div>
+    <nav class="tabs" role="tablist">
+      <button role="tab" data-tab="book" aria-selected="true">Book</button>
+      <button role="tab" data-tab="live">Live P&amp;L</button>
+      <button role="tab" data-tab="track">Track record</button>
+      <button role="tab" data-tab="rank">Rankings</button>
+      <button role="tab" data-tab="status">Status</button>
+      <span id="next-chip" class="next-chip"></span>
+    </nav>
   </header>
   <div id="runbar" class="runbar" hidden><div id="runbar-fill"></div><span id="runbar-text"></span></div>
-
-  <nav class="tabs" role="tablist">
-    <button role="tab" data-tab="book" aria-selected="true">Book</button>
-    <button role="tab" data-tab="live">Live P&amp;L</button>
-    <button role="tab" data-tab="rank">Rankings</button>
-    <button role="tab" data-tab="status">Status</button>
-  </nav>
 
   <main>
     <!-- BOOK -->
@@ -46,7 +55,7 @@
       <div class="controls">
         <div class="field">
           <span class="flabel">Rebalance schedule</span>
-          <div class="seg" id="sched">
+          <div class="seg sched">
             <button data-v="monthly">Monthly</button><button data-v="biweekly">Biweekly</button><button data-v="weekly">Weekly</button>
           </div>
         </div>
@@ -62,7 +71,7 @@
         </label>
         <label class="field">
           <span class="flabel">Short leg, % of long</span>
-          <input id="hedge" type="number" min="0" max="200" step="5">
+          <input id="hedge" class="hedge" type="number" min="0" max="200" step="5">
         </label>
       </div>
 
@@ -82,6 +91,7 @@
           <div class="table-tools">
             <span id="px-asof" class="muted"></span>
             <button id="px-refresh" class="btn">Refresh prices</button>
+            <button id="book-csv" class="btn">Export CSV</button>
             <button id="save-btn" class="btn primary">Save as current portfolio</button>
           </div>
         </div>
@@ -105,17 +115,62 @@
           </div>
         </div>
         <div id="live-tiles" class="tiles"></div>
+        <div class="card chart-card">
+          <div class="card-head"><h2>Portfolio vs Nifty 50 TRI since entry</h2><span id="live-chart-note" class="muted small"></span></div>
+          <div class="chart-box"><canvas id="live-chart"></canvas></div>
+        </div>
+        <div class="table-head">
+          <h2>Positions</h2>
+          <div class="table-tools"><button id="live-csv" class="btn">Export CSV</button><button id="series-csv" class="btn">Export daily series</button></div>
+        </div>
         <div class="scroll"><table id="live-table" class="grid"></table></div>
-        <h2 class="sub">Earlier portfolios</h2>
-        <div class="scroll"><table id="hist-table" class="grid compact"></table></div>
       </div>
+    </section>
+
+    <!-- TRACK RECORD -->
+    <section id="tab-track" class="tab" hidden>
+      <div class="controls">
+        <div class="field">
+          <span class="flabel">Rebalance schedule</span>
+          <div class="seg sched">
+            <button data-v="monthly">Monthly</button><button data-v="biweekly">Biweekly</button><button data-v="weekly">Weekly</button>
+          </div>
+        </div>
+        <label class="field">
+          <span class="flabel">Short leg, % of long</span>
+          <input class="hedge" type="number" min="0" max="200" step="5">
+        </label>
+        <p class="note grow" id="track-note"></p>
+      </div>
+      <div id="track-tiles" class="tiles"></div>
+      <div class="two-col">
+        <div class="card chart-card">
+          <div class="card-head"><h2>Model book vs Nifty 50 TRI, cumulative</h2></div>
+          <div class="chart-box"><canvas id="track-chart"></canvas></div>
+        </div>
+        <div class="card chart-card">
+          <div class="card-head"><h2>Each rebalance: book vs TRI</h2></div>
+          <div class="chart-box"><canvas id="track-bars"></canvas></div>
+        </div>
+      </div>
+      <div class="table-head">
+        <h2>Every rebalance</h2>
+        <div class="table-tools"><button id="track-csv" class="btn">Export CSV</button></div>
+      </div>
+      <div class="scroll"><table id="track-table" class="grid"></table></div>
+      <div class="table-head">
+        <h2>Your saved portfolios</h2>
+        <div class="table-tools"><button id="ports-csv" class="btn">Export CSV</button></div>
+      </div>
+      <div class="scroll"><table id="ports-table" class="grid"></table></div>
+      <p class="note" id="bench-note"></p>
     </section>
 
     <!-- RANKINGS -->
     <section id="tab-rank" class="tab" hidden>
       <div class="table-head">
         <h2 id="rank-title">Rankings</h2>
-        <div class="table-tools"><span id="rank-asof" class="muted"></span><button id="rank-refresh" class="btn">Refresh prices</button></div>
+        <div class="table-tools"><span id="rank-asof" class="muted"></span><button id="rank-refresh" class="btn">Refresh prices</button><button id="rank-csv" class="btn">Export CSV</button></div>
       </div>
       <div class="scroll"><table id="rank-table" class="grid"></table></div>
       <p class="note">Final score = weighted factor score minus the average of the stock's style group. Top 15 long, bottom 15 short. Factor columns are cross-sectional z-scores on the latest close.</p>
@@ -133,7 +188,14 @@
     <h2>Save as current portfolio</h2>
     <p class="muted" id="save-sub"></p>
     <label>Name<input id="save-name" type="text"></label>
-    <p class="muted">Entry prices default to the latest futures prices. Change them to your actual fills if they differ.</p>
+    <fieldset class="entry">
+      <legend>Entry prices</legend>
+      <label class="radio"><input type="radio" name="entry" value="live" checked> Live futures prices now (entry date today)</label>
+      <label class="radio"><input type="radio" name="entry" value="close"> Futures close of
+        <input id="entry-date" type="date"> <button type="button" id="entry-load" class="btn">Load closes</button></label>
+      <span id="entry-msg" class="muted small"></span>
+    </fieldset>
+    <p class="muted small">Change any price to your actual fill. The performance graph starts from the entry date.</p>
     <div class="scroll dlg-scroll"><table id="save-table" class="grid compact"></table></div>
     <p class="msg" id="save-msg"></p>
     <div class="dlg-actions">

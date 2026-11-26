@@ -22,7 +22,25 @@ def fake_quotes(fsyms):
     return out
 
 
+FIX = pd.read_csv(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+                               "tests/fixtures/fyers_closes_2026-10-23_to_11-25.csv"), parse_dates=["date"])
+
+
+def fake_history(fsym, start, end):
+    """futures: the stock's cash closes x today's futures/cash ratio (test data only)"""
+    s = fsym.split(":", 1)[1]
+    if s.endswith("FUT"):
+        sym = s[:-8]
+        ratio = float(FUT.loc[sym, "fut_ltp"] / Q.loc[sym, "lp"]) if sym in FUT.index and sym in Q.index else 1.003
+        g = FIX[(FIX.symbol == sym) & (FIX.date >= pd.Timestamp(start)) & (FIX.date <= pd.Timestamp(end))]
+        return pd.DataFrame({"date": g.date.values, "close": (g.close * ratio).round(2).values})
+    return pd.DataFrame(columns=["date", "close"])
+
+
 FY.quotes = fake_quotes
+FY.history = fake_history
+FY.configured = lambda: True
+FY.settings_problems = lambda: []
 import app.main as M   # noqa: E402
 M.FY.quotes = fake_quotes
 import uvicorn  # noqa: E402

@@ -8,7 +8,10 @@ An internal website for the PRESTIGE Nifty 50 long/short model. It is a separate
 - **save a book as the current portfolio** and follow its live P&L, with prices refreshed every 5, 15 or 30 minutes.
 - see every Nifty 50 stock's rank and factor scores.
 
-The site shows no charges and no backtest.
+- follow every rebalance since the live start (26-Oct-2026) against the Nifty 50 TRI in the **Track record** tab, for monthly, biweekly or weekly rebalancing, together with every portfolio you saved.
+- export any table to CSV (opens in Excel).
+
+The site shows no charges and no backtest. The Nifty 50 TRI is the official index to 23-Oct-2026, then extended with Nifty 50 price returns from FYERS, which has no TRI; dividends after that date (about 0.1% a month) are not included. Set `LIVE_START` (YYYY-MM-DD) to change where the track record starts.
 
 The model code reproduces the research exactly. For the same data, it gives the same factor values, factor weights, all 189 historical monthly books, and the November-2026 book. `tests/smoke_test.py` checks the November book on any machine.
 

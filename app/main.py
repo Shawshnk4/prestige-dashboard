@@ -197,7 +197,68 @@ def save_portfolio(body: dict = Body(...), u: str = Depends(user)):
     cur = db.current_portfolio()
     if cur:
         db.close_portfolio(cur["id"], u, _exit_prices(cur))
-    return db.save_portfolio(body, u)
+    saved = db.save_portfolio(body, u)
+    if FY.configured() and not FY.settings_problems():          # start collecting its futures closes for the graph
+        def fetch():
+            try:
+                runner.update_portfolio_futures(runner.last_complete_session(CAL.load_holidays()), [saved])
+            except Exception:
+                pass
+        threading.Thread(target=fetch, daemon=True).start()
+    return saved
+
+
+@app.post("/api/fut_close")
+def fut_close(body: dict = Body(...), u: str = Depends(user)):
+    """futures closes on a past date, to fill in entry prices when a portfolio was traded at that close"""
+    syms = [s for s in body.get("symbols", []) if isinstance(s, str)][:60]
+    if not syms or not body.get("contract") or not body.get("date"):
+        raise HTTPException(400, "symbols, contract and date are required")
+    try:
+        got = runner.fut_closes_on(syms, body["contract"], body["date"])
+    except Exception as e:
+        raise HTTPException(502, f"FYERS history failed: {e}")
+    return dict(date=body["date"], closes=got, missing=[s for s in syms if s not in got])
+
+
+@app.get("/api/portfolios/{pid}/series")
+def portfolio_series(pid: int, u: str = Depends(user)):
+    """daily P&L of a saved portfolio from its futures closes, and the Nifty 50 TRI over the same days"""
+    p = db.get_portfolio(pid)
+    if not p:
+        raise HTTPException(404, "no such portfolio")
+    fs = runner.portfolio_fut_symbols(p)
+    start = pd.Timestamp(p["trade_date"])
+    end = pd.Timestamp(str(p["closed_at"])[:10]) if p.get("closed_at") else None
+    F = db.load_fut(fs, start)
+    piv = F.pivot_table(index="date", columns="symbol", values="close", aggfunc="last").sort_index() if len(F) else pd.DataFrame()
+    if len(piv):
+        piv = piv[(piv.index >= start) & ((piv.index <= end) if end is not None else True)].ffill()
+    res = runner.latest() or {}
+    b = pd.Series(res.get("bench", {}), dtype=float); b.index = pd.to_datetime(b.index)
+    out = dict(id=p["id"], start=str(start.date()), capital=p["capital"], hedge=p["hedge"], bench_note=res.get("bench_note"),
+               dates=[], pnl=[], long_pnl=[], short_pnl=[], ret=[], bench=[], missing=[])
+    if not len(piv):
+        out["pending"] = True
+        return out
+    pos = {CAL.fut_symbol(x["symbol"], p["contract"]): x for x in p["positions"]}
+    out["missing"] = [x["symbol"] for f, x in pos.items() if f not in piv.columns]
+    L = pd.Series(0.0, index=piv.index); S = pd.Series(0.0, index=piv.index)
+    for f, x in pos.items():
+        if f not in piv.columns:
+            continue
+        sign = 1 if x["side"] == "LONG" else -1
+        v = sign * x["lots"] * x["lot_size"] * (piv[f] - float(x["entry_fut"]))
+        if sign > 0: L = L + v
+        else: S = S + v
+    base = b[b.index <= start]
+    bser = (b.reindex(piv.index, method="ffill") / base.iloc[-1] - 1) if len(base) else pd.Series(float("nan"), index=piv.index)
+    cap = float(p["capital"])
+    out.update(dates=[str(d.date()) for d in piv.index], pnl=[round(float(x), 2) for x in L + S],
+               long_pnl=[round(float(x), 2) for x in L], short_pnl=[round(float(x), 2) for x in S],
+               ret=[round(float(x) / cap, 6) for x in L + S], bench=[None if pd.isna(x) else round(float(x), 6) for x in bser],
+               bench_last=float(b.iloc[-1]) if len(b) else None, bench_last_date=str(b.index[-1].date()) if len(b) else None)
+    return out
 
 
 @app.post("/api/portfolios/{pid}/close")
