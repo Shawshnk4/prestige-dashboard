@@ -79,7 +79,7 @@ async function start() {
 async function loadAll() {
   const [st, m, p] = await Promise.allSettled([api("/api/status"), api("/api/model"), api("/api/portfolios")]);
   S.status = st.status === "fulfilled" ? st.value : null;
-  S.model = m.status === "fulfilled" ? m.value : null;
+  S.model = m.status === "fulfilled" && !m.value.no_run ? m.value : null;
   S.ports = p.status === "fulfilled" ? p.value : null;
   if (st.status === "rejected" && /team list/.test(st.reason.message)) { showLogin(st.reason.message); return; }
   renderHeader(); renderBook(); renderLive(); renderRank(); renderStatus();

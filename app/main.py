@@ -123,7 +123,7 @@ def cron_run(x_cron_secret: str | None = Header(default=None)):
 def model(u: str = Depends(user)):
     r = runner.latest()
     if r is None:
-        raise HTTPException(404, "No model run yet: press Run model")
+        return JSONResponse({"no_run": True})        # not an error: nothing has been run yet
     return JSONResponse(r)
 
 
