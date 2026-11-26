@@ -83,6 +83,8 @@ class Model:
             if c not in SECS.SYMBOL_TO_SECTOR:
                 raise KeyError(f"{c}: no sector in data/ref/sectors.csv")
         self.cal = ctx.dates; self.END = self.cal[-1]
+        self.tc = CAL.TradingCalendar(self.cal, self.holidays)
+        self._completed_weeks_only()
         self._factors(pr)
         self._styles()
         self.RAW_IR1F = self._resid_raw(pr["ir1f"]["window"])
@@ -90,9 +92,20 @@ class Model:
         self.VOL = r.rolling(pr["book"]["vol_window"], min_periods=pr["book"]["vol_min"]).std() * np.sqrt(252)
         self.cf = ctx.close.ffill(limit=10)
         self._universe()
-        self.tc = CAL.TradingCalendar(self.cal, self.holidays)
         self.E = CAL.expiries(self.tc)
         self._weights()
+
+    # ------------------------------------------------------------------ weekly bars: completed weeks only
+    def _completed_weeks_only(self):
+        """The weekly chart uses completed weeks only (methodology 3.1). In history every week is complete; at the end
+        of the data the current week is still open unless the latest close is that week's last session, so its bar is
+        dropped (otherwise a mid-week close would be read as a weekly close)."""
+        ctx = self.ctx
+        self.week_open = self.tc.next_session(self.END).to_period("W-FRI") == self.END.to_period("W-FRI")
+        if self.week_open:
+            ctx.wclose = ctx.wclose.iloc[:-1]
+            ctx.wpos_of_day = np.searchsorted(ctx.wclose.index.values, ctx.dates.values, side="right") - 1
+            ctx._rsi_cache = {}
 
     # ------------------------------------------------------------------ factors (v3_daily + corrected SECTOR)
     def _factors(self, pr):
