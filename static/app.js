@@ -431,7 +431,7 @@ function renderStatus() {
     <dt>Universe</dt><dd>Nifty 50 (${st.members.nifty50} members), sectors from Nifty 100 (${st.members.nifty100})</dd>
     <dt>Holiday list runs to</dt><dd>${day(st.holidays_until, true)}</dd></dl></div>
   <div class="box"><h2>Connections</h2><dl>
-    <dt>FYERS credentials</dt><dd>${yes(st.fyers_configured, "set on the server", "missing: add them in Render, Environment")}</dd>
+    <dt>FYERS settings</dt><dd>${(st.fyers_problems || []).length ? `<ul>${st.fyers_problems.map((x) => `<li class="bad">${esc(x)}</li>`).join("")}</ul>` : yes(st.fyers_configured, "filled in", "missing: fill them in .env (or Render, Environment)")}</dd>
     <dt>FYERS login today</dt><dd>${yes(st.fyers_token.valid, "logged in " + esc(String(st.fyers_token.at || "").slice(0, 16).replace("T", " ")), "not yet (logs in automatically on the next run or price refresh)")}</dd>
     <dt>Signed in as</dt><dd>${esc(st.user)}</dd>
     <dt>Last run</dt><dd>${run.error ? `<span class="bad">${esc(run.error)}</span>` : (m ? esc(String(m.run_at).slice(0, 16).replace("T", " ")) + " by " + esc(m.run_by) : "–")}</dd></dl></div>

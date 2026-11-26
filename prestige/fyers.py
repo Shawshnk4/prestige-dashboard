@@ -40,6 +40,49 @@ def configured() -> bool:
     return all(os.getenv(k) for k in ("FYERS_CLIENT_ID", "FYERS_SECRET_KEY", "FYERS_FY_ID", "FYERS_PIN", "FYERS_TOTP_KEY"))
 
 
+SAMPLES = {"FYERS_CLIENT_ID": "ABCD1234-100", "FYERS_SECRET_KEY": "your-app-secret", "FYERS_FY_ID": "your-fyers-client-id",
+           "FYERS_PIN": "your-4-digit-pin", "FYERS_TOTP_KEY": "your-totp-secret-key"}
+
+
+def totp_secret(raw: str) -> str:
+    """the TOTP secret from FYERS_TOTP_KEY; accepts the bare key (any case, with spaces) or the whole otpauth:// text"""
+    s = (raw or "").strip().strip("'\"")
+    if s.lower().startswith("otpauth://"):
+        s = parse_qs(urlparse(s).query).get("secret", [""])[0]
+    return s.replace(" ", "").upper().rstrip("=")
+
+
+def settings_problems() -> list:
+    """plain-language problems with the FYERS settings, without revealing their values"""
+    import re
+    out = []
+    for k, sample in SAMPLES.items():
+        v = (os.getenv(k) or "").strip()
+        if not v:
+            out.append(f"{k} is empty in .env")
+        elif v == sample:
+            out.append(f"{k} still has the sample value from .env.example: put your own value there")
+    cid = (os.getenv("FYERS_CLIENT_ID") or "").strip()
+    if cid and cid != SAMPLES["FYERS_CLIENT_ID"] and not re.fullmatch(r"[A-Z0-9]+-\d{3}", cid):
+        out.append("FYERS_CLIENT_ID should be the App ID shown on myapi.fyers.in, like ABCD1234-100 (letters/digits, a dash, 3 digits)")
+    pin = (os.getenv("FYERS_PIN") or "").strip()
+    if pin and pin != SAMPLES["FYERS_PIN"] and not pin.isdigit():
+        out.append("FYERS_PIN should be your 4-digit FYERS PIN (digits only)")
+    raw = (os.getenv("FYERS_TOTP_KEY") or "").strip()
+    if raw and raw != SAMPLES["FYERS_TOTP_KEY"]:
+        t = totp_secret(raw)
+        if re.fullmatch(r"\d{6}", t):
+            out.append("FYERS_TOTP_KEY is a 6-digit code. It needs the long secret key from the TOTP setup (QR code), "
+                       "not the code that changes every 30 seconds")
+        elif not re.fullmatch(r"[A-Z2-7]+", t):
+            bad = sorted(set(c for c in t if not re.fullmatch(r"[A-Z2-7]", c)))
+            out.append("FYERS_TOTP_KEY is not a TOTP secret key: a key uses only letters A-Z and digits 2-7, but this one "
+                       f"contains {' '.join(repr(c) for c in bad[:6])}. Copy the key again from the TOTP setup (QR code)")
+        elif len(t) < 16:
+            out.append(f"FYERS_TOTP_KEY looks too short ({len(t)} characters; FYERS keys are usually 32): copy the whole key")
+    return out
+
+
 # ------------------------------------------------------------------ rate limiter (FYERS: per second / minute caps)
 class Limiter:
     def __init__(self, per_sec, per_min):
@@ -80,22 +123,25 @@ def _login() -> str:
     import pyotp, requests
     from fyers_apiv3 import fyersModel
     client_id, secret = _env("FYERS_CLIENT_ID"), _env("FYERS_SECRET_KEY")
-    fy_id, pin, totp = _env("FYERS_FY_ID"), _env("FYERS_PIN"), _env("FYERS_TOTP_KEY")
+    probs = settings_problems()
+    if probs:
+        raise FyersError("Fix .env, then close and restart PRESTIGE: " + "; ".join(probs))
+    fy_id, pin, totp = _env("FYERS_FY_ID"), _env("FYERS_PIN").strip(), totp_secret(_env("FYERS_TOTP_KEY"))
     redirect = _env("FYERS_REDIRECT_URI", "https://trade.fyers.in/api-login/redirect-uri/index.html")
     r1 = _post(f"{VAGATOR}/send_login_otp_v2", {"fy_id": _b64(fy_id), "app_id": "2"}, step="send OTP")
     if "request_key" not in r1:
-        raise FyersError(f"FYERS login (send OTP) failed: {r1.get('message', 'no request key')}")
+        raise FyersError(f"FYERS login (first step) failed: {r1.get('message', '')} (check FYERS_FY_ID is your FYERS client ID)")
     if datetime.now().second % 30 > 26:            # do not straddle a TOTP window
         time.sleep(5)
     r2 = _post(f"{VAGATOR}/verify_otp", {"request_key": r1["request_key"], "otp": pyotp.TOTP(totp).now()}, step="verify TOTP")
     if "request_key" not in r2:
-        raise FyersError(f"FYERS login (TOTP) failed: {r2.get('message', 'check FYERS_TOTP_KEY')}")
+        raise FyersError(f"FYERS login (TOTP) failed: {r2.get('message', '')} (check FYERS_TOTP_KEY is the key of the TOTP now enabled on this FYERS account, and that your computer's clock is correct)")
     ses = requests.Session()
     r3 = _post(f"{VAGATOR}/verify_pin_v2", {"request_key": r2["request_key"], "identity_type": "pin", "identifier": _b64(pin)},
                session=ses, step="verify PIN")
     tok = (r3.get("data") or {}).get("access_token")
     if not tok:
-        raise FyersError(f"FYERS login (PIN) failed: {r3.get('message', 'check FYERS_PIN')}")
+        raise FyersError(f"FYERS login (PIN) failed: {r3.get('message', '')} (check FYERS_PIN)")
     ses.headers.update({"authorization": f"Bearer {tok}"})
     r4 = _post("https://api-t1.fyers.in/api/v3/token",
                {"fyers_id": fy_id, "app_id": client_id[:-4], "redirect_uri": redirect, "appType": client_id[-3:],

@@ -79,7 +79,7 @@ def status(u: str = Depends(user)):
     lr = runner.latest()
     last = db.last_dates()
     hol = CAL.load_holidays()
-    return dict(user=u, fyers_configured=FY.configured(), fyers_token=FY.token_status(), run=_run_state(),
+    return dict(user=u, fyers_configured=FY.configured(), fyers_problems=FY.settings_problems(), fyers_token=FY.token_status(), run=_run_state(),
                 latest_run=None if not lr else dict(data_end=lr.get("data_end"), run_at=lr.get("run_at"), run_by=lr.get("run_by"),
                                                      warnings=lr.get("warnings", []), jumps=lr.get("jumps", [])),
                 stored=dict(symbols=len(last), last_date=str(max(last.values()).date()) if last else None,
