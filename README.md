@@ -12,6 +12,24 @@ The site shows no charges and no backtest.
 
 The model code reproduces the research exactly. For the same data, it gives the same factor values, factor weights, all 189 historical monthly books, and the November-2026 book. `tests/smoke_test.py` checks the November book on any machine.
 
+## Two ways to run it
+
+| | A. Your own computer | B. Team website |
+|---|---|---|
+| Who can open it | you, on that computer (http://127.0.0.1:8000) | your team, from anywhere, with a sign-in |
+| You need | Python 3.13 + a FYERS API app | a FYERS API app + Supabase + Render (+ GitHub) |
+| Runs when | the computer is on and the program is started | always |
+| Setup time | about 20 minutes | about an hour |
+
+**A. Your own computer**
+1. Install Python 3.13 from python.org. On Windows, tick "Add python.exe to PATH".
+2. Unzip the folder. Copy `.env.example` to `.env`, open it in Notepad, and fill in the six `FYERS_...` lines (step 1 below). Leave `AUTH_DISABLED=1` and the `sqlite` `DATABASE_URL` as they are.
+3. Double-click `run_local.bat` (Windows) or run `./run_local.sh` (Mac).
+   - The first start installs the libraries (a few minutes), checks that the November book reproduces, and opens the dashboard in your browser.
+4. Press **Run model**. The first run fetches FYERS closes from 23-Oct-2026 (2–3 minutes). After that, the books, lots and live prices are on screen.
+
+**B. Team website:** steps 1 to 5 below.
+
 ## How it fits together
 
 ```
