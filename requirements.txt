@@ -1,0 +1,12 @@
+# pinned to the versions the model was verified with (reproduces the research books exactly)
+pandas==3.0.5
+numpy==2.5.3
+pyarrow==26.0.1
+openpyxl==3.1.5
+fastapi==0.165.0
+uvicorn==0.54.0
+httpx==0.28.1
+psycopg[binary]==3.3.9
+fyers-apiv3==3.3.0
+pyotp==2.12.1
+requests==2.34.2

@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PRESTIGE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/styles.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+</head>
+<body>
+<div id="login" class="login" hidden>
+  <form id="login-form" class="login-card">
+    <div class="wordmark">PRESTIGE</div>
+    <p class="muted">Nifty 50 long/short book. Team sign-in.</p>
+    <label>Email<input id="login-email" type="email" autocomplete="username" required></label>
+    <label>Password<input id="login-pass" type="password" autocomplete="current-password" required></label>
+    <button class="btn primary" type="submit">Sign in</button>
+    <p id="login-msg" class="msg"></p>
+  </form>
+</div>
+
+<div id="app" hidden>
+  <header class="top">
+    <div class="wordmark">PRESTIGE</div>
+    <div id="datastate" class="datastate"></div>
+    <div class="top-actions">
+      <button id="run-btn" class="btn primary">Run model</button>
+      <button id="signout" class="btn ghost">Sign out</button>
+    </div>
+  </header>
+  <div id="runbar" class="runbar" hidden><div id="runbar-fill"></div><span id="runbar-text"></span></div>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-tab="book" aria-selected="true">Book</button>
+    <button role="tab" data-tab="live">Live P&amp;L</button>
+    <button role="tab" data-tab="rank">Rankings</button>
+    <button role="tab" data-tab="status">Status</button>
+  </nav>
+
+  <main>
+    <!-- BOOK -->
+    <section id="tab-book" class="tab">
+      <div class="controls">
+        <div class="field">
+          <span class="flabel">Rebalance schedule</span>
+          <div class="seg" id="sched">
+            <button data-v="monthly">Monthly</button><button data-v="biweekly">Biweekly</button><button data-v="weekly">Weekly</button>
+          </div>
+        </div>
+        <div class="field">
+          <span class="flabel">Show</span>
+          <div class="seg" id="which">
+            <button data-v="held">Book in force</button><button data-v="next">Next rebalance</button><button data-v="latest">On latest close</button>
+          </div>
+        </div>
+        <label class="field">
+          <span class="flabel">Long capital (₹)</span>
+          <input id="capital" type="text" inputmode="numeric">
+        </label>
+        <label class="field">
+          <span class="flabel">Short leg, % of long</span>
+          <input id="hedge" type="number" min="0" max="200" step="5">
+        </label>
+      </div>
+
+      <div id="book-head" class="book-head"></div>
+      <div id="book-empty" class="empty" hidden></div>
+      <div id="book-body">
+        <div class="ladder-wrap">
+          <div class="ladder-legend"><span class="s">Short leg</span><span class="mid">weight in leg</span><span class="l">Long leg</span></div>
+          <div id="ladder" class="ladder"></div>
+        </div>
+        <div class="weights-row">
+          <span class="flabel">Factor weights</span>
+          <div id="fw" class="fw"></div>
+        </div>
+        <div class="table-head">
+          <h2>Positions and lots</h2>
+          <div class="table-tools">
+            <span id="px-asof" class="muted"></span>
+            <button id="px-refresh" class="btn">Refresh prices</button>
+            <button id="save-btn" class="btn primary">Save as current portfolio</button>
+          </div>
+        </div>
+        <div class="scroll"><table id="book-table" class="grid"></table></div>
+        <div id="book-sum" class="sumline"></div>
+      </div>
+    </section>
+
+    <!-- LIVE -->
+    <section id="tab-live" class="tab" hidden>
+      <div id="live-empty" class="empty" hidden>No current portfolio yet. Open the Book tab, size a book and choose Save as current portfolio.</div>
+      <div id="live-body" hidden>
+        <div class="live-head">
+          <div id="live-title"></div>
+          <div class="table-tools">
+            <label class="inline">Refresh every
+              <select id="live-every"><option value="5">5 min</option><option value="15" selected>15 min</option><option value="30">30 min</option></select>
+            </label>
+            <button id="live-refresh" class="btn">Refresh now</button>
+            <button id="live-close" class="btn ghost">Close portfolio</button>
+          </div>
+        </div>
+        <div id="live-tiles" class="tiles"></div>
+        <div class="scroll"><table id="live-table" class="grid"></table></div>
+        <h2 class="sub">Earlier portfolios</h2>
+        <div class="scroll"><table id="hist-table" class="grid compact"></table></div>
+      </div>
+    </section>
+
+    <!-- RANKINGS -->
+    <section id="tab-rank" class="tab" hidden>
+      <div class="table-head">
+        <h2 id="rank-title">Rankings</h2>
+        <div class="table-tools"><span id="rank-asof" class="muted"></span><button id="rank-refresh" class="btn">Refresh prices</button></div>
+      </div>
+      <div class="scroll"><table id="rank-table" class="grid"></table></div>
+      <p class="note">Final score = weighted factor score minus the average of the stock's style group. Top 15 long, bottom 15 short. Factor columns are cross-sectional z-scores on the latest close.</p>
+    </section>
+
+    <!-- STATUS -->
+    <section id="tab-status" class="tab" hidden>
+      <div id="status-body" class="status"></div>
+    </section>
+  </main>
+</div>
+
+<dialog id="save-dlg">
+  <form method="dialog" id="save-form">
+    <h2>Save as current portfolio</h2>
+    <p class="muted" id="save-sub"></p>
+    <label>Name<input id="save-name" type="text"></label>
+    <p class="muted">Entry prices default to the latest futures prices. Change them to your actual fills if they differ.</p>
+    <div class="scroll dlg-scroll"><table id="save-table" class="grid compact"></table></div>
+    <p class="msg" id="save-msg"></p>
+    <div class="dlg-actions">
+      <button value="cancel" class="btn ghost" formnovalidate>Cancel</button>
+      <button id="save-confirm" value="default" class="btn primary">Save portfolio</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

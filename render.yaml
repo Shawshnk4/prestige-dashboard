@@ -1,0 +1,38 @@
+# Render Blueprint: New -> Blueprint -> pick this repository. Secrets are entered in the Render dashboard (sync: false).
+services:
+  - type: web
+    name: prestige
+    runtime: python
+    plan: standard            # 2 GB RAM: a model run peaks near 450 MB, too close to the 512 MB plans
+    region: singapore
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1
+    healthCheckPath: /api/config
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.7
+      - key: TZ
+        value: Asia/Kolkata
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: ALLOWED_EMAILS
+        sync: false
+      - key: FYERS_CLIENT_ID
+        sync: false
+      - key: FYERS_SECRET_KEY
+        sync: false
+      - key: FYERS_REDIRECT_URI
+        sync: false
+      - key: FYERS_FY_ID
+        sync: false
+      - key: FYERS_PIN
+        sync: false
+      - key: FYERS_TOTP_KEY
+        sync: false
+      - key: CRON_SECRET
+        generateValue: true

@@ -1,0 +1,64 @@
+{
+  "D": {
+    "rsi_len": 14,
+    "smooth_type": "EMA",
+    "smooth_len": 9,
+    "bb_len": 20,
+    "bb_k": 1.5,
+    "slope_bars": 3,
+    "cross_bars": 5,
+    "reject_bars": 5,
+    "reject_drop": 0.15
+  },
+  "W": {
+    "rsi_len": 14,
+    "smooth_type": "EMA",
+    "smooth_len": 9,
+    "bb_len": 20,
+    "bb_k": 1.5,
+    "slope_bars": 2,
+    "cross_bars": 3,
+    "reject_bars": 3,
+    "reject_drop": 0.15
+  },
+  "w_weekly": 0.6,
+  "z_cap": 3.0,
+  "w_ir1_2m": 1.0,
+  "ir1_sign": -1.0,
+  "w_ir2_2m": 0.5,
+  "w_sec_ir2": 0.5,
+  "edgesD": [
+    0.0,
+    25.0,
+    35.0,
+    50.0,
+    65.0,
+    101.0
+  ],
+  "edgesW": [
+    0.0,
+    25.0,
+    30.0,
+    55.0,
+    80.0,
+    101.0
+  ],
+  "is_end": "2018-12-31",
+  "icir": {
+    "window": 36,
+    "min_obs": 18,
+    "shrink": 0.5,
+    "lag": 2,
+    "fwd_days": 21
+  },
+  "ir1f": {
+    "window": 252
+  },
+  "book": {
+    "n": 15,
+    "vol_window": 63,
+    "vol_min": 50
+  },
+  "sector_min_live": 2,
+  "note": "Frozen on 2011-18 data in the PRESTIGE research; do not edit."
+}
