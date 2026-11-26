@@ -3,7 +3,7 @@
 Credentials come only from environment variables (set them in Render's Environment settings, never in code):
   FYERS_CLIENT_ID   app id from the FYERS API dashboard, e.g. ABCD1234-100
   FYERS_SECRET_KEY  the app's secret
-  FYERS_REDIRECT_URI the app's redirect URL exactly as registered (default https://www.google.com/)
+  FYERS_REDIRECT_URI the app's redirect URL exactly as registered (default: FYERS's own redirect page)
   FYERS_FY_ID       FYERS client id used to sign in (e.g. XY12345)
   FYERS_PIN         4-digit trading PIN
   FYERS_TOTP_KEY    the TOTP secret shown when external 2FA (TOTP) is enabled on the FYERS account
@@ -81,7 +81,7 @@ def _login() -> str:
     from fyers_apiv3 import fyersModel
     client_id, secret = _env("FYERS_CLIENT_ID"), _env("FYERS_SECRET_KEY")
     fy_id, pin, totp = _env("FYERS_FY_ID"), _env("FYERS_PIN"), _env("FYERS_TOTP_KEY")
-    redirect = _env("FYERS_REDIRECT_URI", "https://www.google.com/")
+    redirect = _env("FYERS_REDIRECT_URI", "https://trade.fyers.in/api-login/redirect-uri/index.html")
     r1 = _post(f"{VAGATOR}/send_login_otp_v2", {"fy_id": _b64(fy_id), "app_id": "2"}, step="send OTP")
     if "request_key" not in r1:
         raise FyersError(f"FYERS login (send OTP) failed: {r1.get('message', 'no request key')}")

@@ -45,13 +45,14 @@ Price history to 23-Oct-2026 is the clean history used in the research, stored i
 ## Setup (once)
 
 ### 1. FYERS API app and TOTP
-1. Sign in at https://myapi.fyers.in/dashboard and choose **Create App**.
-2. Enter any redirect URL, for example `https://www.google.com/`. Write it down exactly; it goes into `FYERS_REDIRECT_URI`.
-3. Note the **App ID** (it looks like `ABCD1234-100`) and the **Secret ID**.
-4. In the FYERS account, open **My Account → Security → External 2FA TOTP** and enable it. When the QR code is shown, also copy the **text key**: that is `FYERS_TOTP_KEY`.
+1. Sign in at https://myapi.fyers.in/dashboard and choose **Create non-trading app**.
+   - PRESTIGE only reads prices, so it needs no static IP: the Primary/Secondary IP fields belong to *trading* apps.
+2. App name: `PRESTIGE`. Redirect URL: `https://trade.fyers.in/api-login/redirect-uri/index.html` (FYERS's own page; put the same text in `FYERS_REDIRECT_URI`). Accept the terms and click **Create**.
+3. Note the **App ID** (`ABCD1234-100`) and **Secret ID**.
+4. On fyers.in/web: profile icon → **Others** → **External 2FA TOTP** → **Enable**. Scan the QR code with Google Authenticator and also keep the text key it encodes (`FYERS_TOTP_KEY`).
 5. You also need your FYERS client ID (`FYERS_FY_ID`) and 4-digit PIN (`FYERS_PIN`).
 
-Keep these values out of chat, email and code. They go only into Render's Environment settings (step 4).
+Keep these values out of chat, email and code: they go only into `.env` on your computer or Render's Environment settings.
 
 ### 2. Supabase (database and team sign-in)
 1. Create a new project at https://supabase.com and choose the Mumbai region.
