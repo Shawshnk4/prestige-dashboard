@@ -21,7 +21,9 @@ from . import db
 IST = ZoneInfo("Asia/Kolkata")
 VAGATOR = "https://api-t2.fyers.in/vagator/v2"
 HEADERS = {"User-Agent": "Mozilla/5.0", "Content-Type": "application/json"}
-LOG_DIR = os.getenv("FYERS_LOG_DIR", "/tmp")
+import tempfile
+# the FYERS library writes two log files; keep them in the system temp folder (works on Windows, Mac, Linux, Render)
+LOG_DIR = os.getenv("FYERS_LOG_DIR") or os.path.join(tempfile.gettempdir(), "prestige_fyers_logs")
 TOKEN_KEY = "fyers_token"
 
 
@@ -189,7 +191,8 @@ def client(force=False):
         if tok is None:
             tok = _login()
             db.set_state(TOKEN_KEY, json.dumps({"token": tok, "at": made.isoformat()}))
-        m = fyersModel.FyersModel(client_id=_env("FYERS_CLIENT_ID"), token=tok, is_async=False, log_path=LOG_DIR)
+        os.makedirs(LOG_DIR, exist_ok=True)
+        m = fyersModel.FyersModel(client_id=_env("FYERS_CLIENT_ID").strip(), token=tok, is_async=False, log_path=LOG_DIR)
         _client = (m, made)
         return m
 
