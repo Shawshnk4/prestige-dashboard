@@ -58,12 +58,18 @@ def settings_problems() -> list:
     """plain-language problems with the FYERS settings, without revealing their values"""
     import re
     out = []
-    for k, sample in SAMPLES.items():
+    where = "Render (prestige → Environment)" if os.getenv("RENDER") else ".env"
+    for k, sample in list(SAMPLES.items()) + [("FYERS_REDIRECT_URI", None)]:
         v = (os.getenv(k) or "").strip()
         if not v:
-            out.append(f"{k} is empty in .env")
+            if sample is not None:
+                out.append(f"{k} is empty in {where}")
+        elif ".env" in v.lower() or v.lower().startswith(k.lower()) or v.startswith(("<", "(")):
+            out.append(f"{k} holds the text '{v[:12]}…' instead of your value: put only the part after '=' from that line of your .env file")
         elif v == sample:
             out.append(f"{k} still has the sample value from .env.example: put your own value there")
+    if any("instead of your value" in x for x in out):
+        return out                                    # fix those first; the format checks below would only repeat them
     cid = (os.getenv("FYERS_CLIENT_ID") or "").strip()
     if cid and cid != SAMPLES["FYERS_CLIENT_ID"] and not re.fullmatch(r"[A-Z0-9]+-\d{3}", cid):
         out.append("FYERS_CLIENT_ID should be the App ID shown on myapi.fyers.in, like ABCD1234-100 (letters/digits, a dash, 3 digits)")
@@ -127,7 +133,9 @@ def _login() -> str:
     client_id, secret = _env("FYERS_CLIENT_ID"), _env("FYERS_SECRET_KEY")
     probs = settings_problems()
     if probs:
-        raise FyersError("Fix .env, then close and restart PRESTIGE: " + "; ".join(probs))
+        where = ("Fix these in Render (prestige → Environment → Save Changes; the site restarts by itself): " if os.getenv("RENDER")
+                 else "Fix .env, then close and restart PRESTIGE: ")
+        raise FyersError(where + "; ".join(probs))
     fy_id, pin, totp = _env("FYERS_FY_ID"), _env("FYERS_PIN").strip(), totp_secret(_env("FYERS_TOTP_KEY"))
     redirect = _env("FYERS_REDIRECT_URI", "https://trade.fyers.in/api-login/redirect-uri/index.html")
     r1 = _post(f"{VAGATOR}/send_login_otp_v2", {"fy_id": _b64(fy_id), "app_id": "2"}, step="send OTP")
