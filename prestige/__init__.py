@@ -10,3 +10,12 @@ if _env.exists():
         if _line and not _line.startswith("#") and "=" in _line:
             _k, _, _v = _line.partition("=")
             os.environ.setdefault(_k.strip(), _v.strip().strip("'\""))
+
+
+# Settings pasted into Render or .env often carry a stray space or line break at the end; remove it from every variable
+# this program reads, before any module looks at them.
+for _k in [k for k in os.environ if k.startswith(("FYERS_", "SUPABASE_", "DATABASE_URL", "ALLOWED_EMAILS", "CRON_SECRET",
+                                                  "AUTH_DISABLED", "LIVE_START", "HISTORY_FROM", "QUOTE_TTL"))]:
+    _v = os.environ[_k]
+    if _v != _v.strip():
+        os.environ[_k] = _v.strip()

@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib, os, threading, time
 from pathlib import Path
 
+import prestige  # noqa: F401  (reads .env and trims stray spaces / line breaks in settings first)
 import httpx
 import pandas as pd
 from fastapi import Body, Depends, FastAPI, Header, HTTPException
@@ -47,6 +48,8 @@ def _clean(msg: str) -> str:
     import re
     msg = re.sub(r"postgres(ql)?://[^\s'\"]+", "postgresql://…", msg)
     msg = re.sub(r"(password|secret|token|key)=\S+", r"\1=…", msg, flags=re.I)
+    msg = re.sub(r"sb_(publishable|secret)_[A-Za-z0-9_\-]+", r"sb_\1_…", msg)
+    msg = re.sub(r"eyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+\.?[A-Za-z0-9_\-]*", "eyJ…", msg)
     return msg[:400]
 
 
