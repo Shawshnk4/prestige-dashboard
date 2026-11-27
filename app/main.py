@@ -33,7 +33,32 @@ QUOTE_TTL = int(os.getenv("QUOTE_TTL", "60"))
 
 @app.on_event("startup")
 def _startup():
-    db.init()
+    try:
+        db.init()
+    except Exception as e:                      # keep the site up so the Status tab can show the reason
+        STARTUP_ERROR["db"] = _clean(f"{type(e).__name__}: {e}")
+
+
+STARTUP_ERROR: dict = {}
+
+
+def _clean(msg: str) -> str:
+    """error text safe to show: no connection-string passwords or keys"""
+    import re
+    msg = re.sub(r"postgres(ql)?://[^\s'\"]+", "postgresql://…", msg)
+    msg = re.sub(r"(password|secret|token|key)=\S+", r"\1=…", msg, flags=re.I)
+    return msg[:400]
+
+
+@app.exception_handler(Exception)
+async def _any_error(request, exc):
+    hint = ""
+    t = f"{type(exc).__name__}: {exc}"
+    if "psycopg" in type(exc).__module__ or "OperationalError" in t:
+        hint = " (database: check DATABASE_URL on Render: Transaction pooler address, port 6543, your database password in place of [YOUR-PASSWORD])"
+    elif "httpx" in type(exc).__module__:
+        hint = " (sign-in check: SUPABASE_URL on Render must be your https://….supabase.co address)"
+    return JSONResponse(status_code=500, content={"detail": _clean(t) + hint})
 
 
 # ------------------------------------------------------------------ auth (Supabase Auth session token)
@@ -76,6 +101,9 @@ def config():
 
 @app.get("/api/status")
 def status(u: str = Depends(user)):
+    if STARTUP_ERROR.get("db"):
+        raise HTTPException(500, "Database not reachable: " + STARTUP_ERROR["db"] +
+                            " (check DATABASE_URL on Render: Transaction pooler address, port 6543, your database password)")
     lr = runner.latest()
     last = db.last_dates()
     hol = CAL.load_holidays()

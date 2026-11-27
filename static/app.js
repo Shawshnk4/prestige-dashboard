@@ -89,6 +89,8 @@ async function start() {
 async function loadAll() {
   const [st, m, p] = await Promise.allSettled([api("/api/status"), api("/api/model"), api("/api/portfolios")]);
   S.status = st.status === "fulfilled" ? st.value : null;
+  S.statusErr = st.status === "rejected" ? st.reason.message : null;
+  if (S.statusErr) alertBar(S.statusErr, true);
   S.model = m.status === "fulfilled" && !m.value.no_run ? m.value : null;
   S.ports = p.status === "fulfilled" ? p.value : null;
   if (st.status === "rejected" && /team list/.test(st.reason.message)) { showLogin(st.reason.message); return; }
@@ -621,7 +623,7 @@ function exportRank() {
 /* ---------------------------------------------------------------- status */
 function renderStatus() {
   const st = S.status, m = S.model;
-  if (!st) { $("#status-body").innerHTML = '<div class="box">Status unavailable.</div>'; return; }
+  if (!st) { $("#status-body").innerHTML = `<div class="box"><h2>Status unavailable</h2><p class="bad">${esc(S.statusErr || "The server did not answer.")}</p></div>`; return; }
   const yes = (b, t, f) => b ? `<span class="ok">${t}</span>` : `<span class="bad">${f}</span>`;
   const run = st.run || {};
   const warns = (m && m.warnings) || [], jumps = (m && m.jumps) || [];
