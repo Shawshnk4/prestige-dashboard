@@ -59,7 +59,7 @@ Keep these values out of chat, email and code: they go only into `.env` on your 
 
 ### 2. Supabase (database and team sign-in)
 1. Create a new project at https://supabase.com and choose the Mumbai region.
-2. **Project Settings → Database → Connection string → Session pooler**: copy the URI and put in the database password. This is `DATABASE_URL`.
+2. Click **Connect** (top bar) → **Connection String** → **Transaction pooler** (port 6543): copy the URI and replace `[YOUR-PASSWORD]` with the database password. This is `DATABASE_URL`. Not the Direct connection: Render cannot reach it.
 3. **Project Settings → API**: copy the Project URL (`SUPABASE_URL`) and the `anon` public key (`SUPABASE_ANON_KEY`).
 4. **Authentication → Sign In / Providers**: turn **off** "Allow new users to sign up".
 5. **Authentication → Users → Add user**: create each team member with an email and password.
@@ -76,7 +76,7 @@ Push this folder to a **private** repository.
 
 | Variable | Value |
 |---|---|
-| `DATABASE_URL` | Supabase Session pooler URI (step 2) |
+| `DATABASE_URL` | Supabase Transaction pooler URI (step 2) |
 | `SUPABASE_URL`, `SUPABASE_ANON_KEY` | step 2 |
 | `ALLOWED_EMAILS` | team emails, comma-separated |
 | `FYERS_CLIENT_ID`, `FYERS_SECRET_KEY`, `FYERS_REDIRECT_URI` | step 1 |

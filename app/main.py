@@ -1,7 +1,7 @@
 """PRESTIGE dashboard server (FastAPI). Serves the single-page dashboard and its API.
 
 Environment (Render -> Environment):
-  DATABASE_URL        Supabase Postgres connection string (Session pooler URI)
+  DATABASE_URL        Supabase Postgres connection string (Transaction pooler URI, port 6543)
   SUPABASE_URL        https://<project>.supabase.co          (team login)
   SUPABASE_ANON_KEY   the project's anon/public key          (team login)
   ALLOWED_EMAILS      comma-separated team emails allowed in (empty = any user created in Supabase Auth)
