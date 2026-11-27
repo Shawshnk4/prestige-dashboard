@@ -11,6 +11,7 @@ New symbols  (index entrants not in the base) use FYERS closes as they are, back
 Index rows in the FYERS table use the names NIFTY50, NIFTY100, INDIAVIX; the trading calendar after the anchor is the
 set of dates with a NIFTY50 close."""
 from __future__ import annotations
+import os
 from pathlib import Path
 import numpy as np, pandas as pd
 
@@ -21,25 +22,44 @@ ANCHOR_TOL = 0.02          # FYERS vs base close on the anchor date
 JUMP_FLAG = 0.15           # daily move flagged for review
 
 
+# Live runs use history from 2016 only, and only stocks that were in the Nifty 100 or Nifty 50 at some point since then.
+# Indicator warm-up and every rolling window end well before mid-2023, where the 36-month weight window of the current
+# books begins, so the live books, factor values and weights are identical to a full-history run (tests check this);
+# it keeps a run inside 512 MB of memory. HISTORY_FROM= (empty) loads the full 2009-2026 history.
+HISTORY_FROM = os.getenv("HISTORY_FROM", "2016-01-01") or None
+
+
 class Base:
-    """the frozen panels, loaded once per process"""
-    _cache = None
+    """the frozen panels, loaded once per process (per history start)"""
+    _cache = {}
 
     @classmethod
-    def load(cls):
-        if cls._cache is None:
+    def load(cls, start=None):
+        key = start or "full"
+        if key not in cls._cache:
             b = ROOT / "base"
-            cls._cache = dict(close=pd.read_parquet(b / "close.parquet"), member=pd.read_parquet(b / "member100.parquet").astype(bool),
-                              tri=pd.read_parquet(b / "nifty100.parquet"), vix=pd.read_parquet(b / "vix.parquet")["vix"],
-                              member50=pd.read_parquet(b / "member50.parquet").astype(bool),
-                              tri50=pd.read_parquet(b / "nifty50_tri.parquet")["nifty50_tri"])
-            assert cls._cache["close"].index[-1] == ANCHOR
-        return cls._cache
+            d = dict(close=pd.read_parquet(b / "close.parquet"), member=pd.read_parquet(b / "member100.parquet").astype(bool),
+                     tri=pd.read_parquet(b / "nifty100.parquet"), vix=pd.read_parquet(b / "vix.parquet")["vix"],
+                     member50=pd.read_parquet(b / "member50.parquet").astype(bool),
+                     tri50=pd.read_parquet(b / "nifty50_tri.parquet")["nifty50_tri"])
+            assert d["close"].index[-1] == ANCHOR
+            if start is not None:
+                t = pd.Timestamp(start)
+                keep = d["member"].loc[t:].any() | d["member50"].reindex(columns=d["member"].columns).loc[t:].fillna(False).astype(bool).any()
+                cols = [c for c in d["close"].columns if keep.get(c, False)]
+                if "TMPV" in cols and "TATAMOTORS" not in cols and "TATAMOTORS" in d["close"].columns:
+                    cols.append("TATAMOTORS")
+                d["close"] = d["close"].loc[t:, cols]; d["member"] = d["member"].loc[t:, cols]
+                d["tri"] = d["tri"].loc[t:]; d["vix"] = d["vix"].loc[t:]
+                d["member50"] = d["member50"].loc[t:, [c for c in d["member50"].columns if c in cols]]
+                d["tri50"] = d["tri50"].loc[t:]
+            cls._cache = {key: d}                    # keep one version in memory
+        return cls._cache[key]
 
 
 def current_members(index="NIFTY100", asof=None) -> list:
     """members on `asof` (default: latest) after applying membership changes"""
-    b = Base.load()
+    b = Base.load(HISTORY_FROM)
     m = (b["member"] if index == "NIFTY100" else b["member50"]).loc[ANCHOR]
     s = set(m[m].index)
     for _, r in _changes().iterrows():
@@ -65,10 +85,11 @@ def _adjustments():
     return pd.read_csv(p, parse_dates=["ex_date"], comment="#")
 
 
-def assemble(fyers: pd.DataFrame):
+def assemble(fyers: pd.DataFrame, history_from="default"):
     """fyers: long table [symbol, date, close] of FYERS daily closes (dates >= the anchor date for base symbols).
+    history_from: first date of the history used (default HISTORY_FROM; None = full history).
     Returns (data dict in the research layout, extras dict, list of warnings)."""
-    b = Base.load()
+    b = Base.load(HISTORY_FROM if history_from == "default" else history_from)
     warn = []
     F = fyers.copy(); F["date"] = pd.to_datetime(F["date"]).dt.normalize()
     F = F.pivot_table(index="date", columns="symbol", values="close", aggfunc="last").sort_index()

@@ -71,7 +71,7 @@ Push this folder to a **private** repository.
 
 ### 4. Render
 1. Go to https://dashboard.render.com and choose **New → Blueprint**, then pick the repository. `render.yaml` sets up the service.
-   - The service uses the 2 GB plan (`standard`), because a model run peaks near 450 MB.
+   - The service uses Render's **free** plan (512 MB; a model run peaks near 330 MB). A free service sleeps after 15 minutes with no visitors; the next visit wakes it in about a minute.
 2. Fill in the environment variables it asks for:
 
 | Variable | Value |

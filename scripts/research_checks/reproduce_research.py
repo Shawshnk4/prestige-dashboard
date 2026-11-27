@@ -8,7 +8,7 @@ from prestige import data_store as DS, model as MD
 from fixtures_from_research import fyers_long
 
 t0 = time.time()
-data, extras, warn = DS.assemble(fyers_long())
+data, extras, warn = DS.assemble(fyers_long(), history_from=None)
 print(f"assembled in {time.time() - t0:.1f}s | warnings: {warn} | jumps flagged: {len(extras['jumps'])}")
 R = pickle.load(open("/home/claude/data/data_v2.pkl", "rb"))
 eq = lambda a, b: a.shape == b.shape and np.allclose(a.astype(float).fillna(-999).values, b.astype(float).fillna(-999).values, rtol=0, atol=1e-9)

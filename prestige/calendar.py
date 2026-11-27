@@ -72,7 +72,8 @@ def expiries(tc: TradingCalendar, user_until="2025-10", months_ahead=3) -> pd.Da
     """monthly F&O expiries from the first user-file expiry up to `months_ahead` months after the latest close"""
     U = pd.to_datetime(pd.read_csv(REF / "expiries_history.csv")["expiry"])
     cut = pd.Period(user_until, "M") + 1
-    out = [tc.on_or_before(e) for e in U if pd.Period(e, "M") < cut]
+    first = tc.all[2]                                   # history may start later than the expiry file
+    out = [tc.on_or_before(e) for e in U if pd.Period(e, "M") < cut and e >= first]
     for per in pd.period_range(cut, pd.Period(tc.end, "M") + months_ahead, freq="M"):
         out.append(tc.on_or_before(last_weekday(per, 1)))
     return pd.DatetimeIndex(sorted(set(out)))

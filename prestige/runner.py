@@ -41,7 +41,7 @@ def update_data(holidays):
     """fetch missing FYERS daily closes; returns (rows written, warnings)"""
     target = last_complete_session(holidays)
     syms = sorted(set(DS.current_members("NIFTY100")) | set(DS.current_members("NIFTY50")))
-    base_cols = set(DS.Base.load()["close"].columns)
+    base_cols = set(DS.Base.load(DS.HISTORY_FROM)["close"].columns)
     todo = [("index", s, CAL.INDEX_SYMBOLS[s]) for s in DS.INDEXES] + [("stock", s, CAL.eq_symbol(s)) for s in syms]
     last = db.last_dates()
     written, warn = 0, []

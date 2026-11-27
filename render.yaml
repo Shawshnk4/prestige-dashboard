@@ -3,7 +3,7 @@ services:
   - type: web
     name: prestige
     runtime: python
-    plan: standard            # 2 GB RAM: a model run peaks near 450 MB, too close to the 512 MB plans
+    plan: free                # 512 MB: a model run peaks near 330 MB; free services sleep after 15 min idle (about 1 min to wake)
     region: singapore
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1
