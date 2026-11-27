@@ -27,7 +27,9 @@ app.mount("/static", StaticFiles(directory=ROOT / "static"), name="static")
 
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
 SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "")
-ALLOWED = {e.strip().lower() for e in os.getenv("ALLOWED_EMAILS", "").split(",") if e.strip()}
+import re as _re
+# team list: emails separated by commas, semicolons, spaces or new lines; quotes ignored
+ALLOWED = {e.strip().strip("'\"<>").lower() for e in _re.split(r"[,;\s]+", os.getenv("ALLOWED_EMAILS", "")) if "@" in e}
 AUTH_OFF = os.getenv("AUTH_DISABLED") == "1" and not os.getenv("RENDER")         # local testing only, never on Render
 QUOTE_TTL = int(os.getenv("QUOTE_TTL", "60"))
 
@@ -87,7 +89,8 @@ def user(authorization: str | None = Header(default=None)) -> str:
         email = (r.json().get("email") or "").lower()
         _auth_cache[key] = (email, time.time())
     if ALLOWED and email not in ALLOWED:
-        raise HTTPException(403, f"{email} is not on the PRESTIGE team list")
+        raise HTTPException(403, f"{email} is not on the PRESTIGE team list: add it to ALLOWED_EMAILS on Render "
+                                 f"(prestige → Environment; it now holds {len(ALLOWED)} address{'es' if len(ALLOWED) != 1 else ''})")
     return email
 
 
